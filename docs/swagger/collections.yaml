@@ -256,21 +256,56 @@ paths:
       parameters:
         - in: query
           name: page
-          description: number of records to skip
+          description: Page number for paginated results.
+          required: false
           schema:
             type: integer
             format: int32
         - in: query
           name: per_page
-          description: max number of records to return per page
+          description: Number of items per page. Use an integer for specific page size or 'all' to retrieve all results
+          required: false
           schema:
-            type: integer
-            format: int32
+            oneOf:
+              - type: integer
+                description: Number of items to return per page
+              - type: string
+                enum: ["all"]
+                description: Return all results without pagination
         - in: query
           name: query
           description: query subscribers with an SQL expression.
+          required: false
           schema:
             type: string
+        - in: query
+          name: order_by
+          description: Result sorting field. Options are name, status, created_at, updated_at
+          required: false
+          schema:
+            type: string
+            enum: ["name", "status", "created_at", "updated_at"]
+        - in: query
+          name: order
+          description: ASC|DESC Sort by ascending or descending order.
+          required: false
+          schema:
+            type: string
+            enum: ["ASC", "DESC"]
+        - in: query
+          name: subscription_status
+          description: Subscription status to filter by if there are one or more list_ids.
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: list_id
+          description: ID of lists to filter by. Repeat in the query for multiple values.
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
 
       responses:
         "200":
@@ -719,36 +754,45 @@ paths:
       operationId: getBounces
       tags:
         - Bounces
-      requestBody:
-        description: output parameters form
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
-                source:
-                  type: string
-                order_by:
-                  type: string
-                order:
-                  type: string
       parameters:
         - in: query
           name: campaign_id
-          description: bounce record retrieval of particular campaign
+          description: Numeric identifier for retrieving bounce records associated with a specific campaign
           schema:
             type: integer
         - in: query
           name: page
-          description: total number of pages
+          description: Page number for paginated results. Start from 1 for the first page
           schema:
             type: integer
         - in: query
           name: per_page
-          description: number of items per page
+          description: Number of items per page. Use an integer for specific page size or 'all' to retrieve all results
           schema:
-            type: integer
+            oneOf:
+              - type: integer
+                description: Number of items to return per page
+              - type: string
+                enum:
+                  - "all"
+                description: Return all results without pagination
+        - in: query
+          name: source
+          description: Filter bounce records by their source of origin
+          schema:
+            type: string
+        - in: query
+          name: order_by
+          description: Specifies the field by which to sort the bounce records. Available options are 'email', 'campaign_name', 'source', and 'created_at'
+          schema:
+            type: string
+            enum: ["email", "campaign_name", "source", "created_at"]
+        - in: query
+          name: order
+          description: Determines the sort order of results. Use 'asc' for ascending or 'desc' for descending order
+          schema:
+            type: string
+            enum: ["asc", "desc"]
       responses:
         "200":
           description: list of bounce records
@@ -773,7 +817,7 @@ paths:
                       page:
                         type: integer
     delete:
-      description: handles retrieval of bounce records.
+      description: handles deletion of bounce records.
       operationId: deleteBounces
       tags:
         - Bounces
@@ -845,7 +889,7 @@ paths:
                 properties:
                   data:
                     type: boolean
-
+                    
   /lists:
     get:
       description: retrieves lists with additional metadata like subscriber counts. This may be slow.
@@ -856,32 +900,54 @@ paths:
         - in: query
           name: page
           description: total number of pages
+          required: false
           schema:
             type: integer
         - in: query
           name: per_page
           description: number of items per page
+          required: false
           schema:
-            type: integer
-      requestBody:
-        required: true
-        description: output parameters form
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
-                query:
-                  description: Optional string to search a list by name.
-                  type: string
-                order_by:
-                  description: Field to sort results by. name|status|created_at|updated_at
-                  type: string
-                order:
-                  description: ASC|DESC Sort by ascending or descending order.
-                  type: string
-                minimal:
-                  type: boolean
+            oneOf:
+              - type: integer
+                description: Number of items to return per page
+              - type: string
+                enum: ["all"]
+                description: Return all results without pagination
+        - in: query
+          name: query
+          description: Optional string to search a list by name.
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: order_by
+          description: Field to sort results by. name|status|created_at|updated_at
+          required: false
+          schema:
+            type: string
+            enum: ["name", "status", "created_at", "updated_at"]
+        - in: query
+          name: order
+          description: ASC|DESC Sort by ascending or descending order.
+          required: false
+          schema:
+            type: string
+            enum: ["ASC", "DESC"]
+        - in: query
+          name: minimal
+          description: When set to true, returns response without body content
+          required: false
+          schema:
+            type: boolean
+        - in: query
+          name: tag
+          description: Tags to filter lists. Repeat in the query for multiple values.
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
       responses:
         "200":
           description: list of metadata
@@ -1027,14 +1093,18 @@ paths:
       requestBody:
         description: uploads and bulk imports of compressed CSV files
         content:
-          application/json:
+          multipart/form-data:
             schema:
               type: object
               properties:
                 params:
                   type: string
+                  description: JSON string containing import parameters for more detail https://listmonk.app/docs/apis/import/#params-json-string
+                  example: '{"mode":"subscribe", "subscription_status":"confirmed", "delim":",", "lists":[1, 2], "overwrite": true}'
                 file:
                   type: string
+                  format: binary
+                  description: File for upload.
       responses:
         "200":
           description: updated import status
@@ -1064,8 +1134,8 @@ paths:
 
   /import/subscribers/logs:
     get:
-      description: returns import statistics
-      operationId: getImportSubscriberStats
+      description: returns import logs from an ongoing import
+      operationId: getImportSubscriberLogs
       tags:
         - Import
       responses:
@@ -1086,45 +1156,64 @@ paths:
       parameters:
         - in: query
           name: status
-          description: status flag of campaign
+          description: Filter campaigns by status. Multiple status values can be specified by repeating the parameter
+          required: false
           schema:
             type: array
             items:
               type: string
-              enum: [scheduled, running, paused, cancelled]
+              enum: ["scheduled", "running", "paused", "cancelled"]
         - in: query
           name: no_body
-          description: boolean flag for response with/without body
+          description: When set to true, returns response without body content
+          required: false
           schema:
             type: boolean
         - in: query
           name: page
-          description: total number of pages
+          description: Page number for paginated results.
+          required: false
           schema:
             type: integer
         - in: query
           name: per_page
-          description: number of items per page
+          description: Number of items per page. Use an integer for specific page size or 'all' to retrieve all results
+          required: false
           schema:
-            type: integer
-      requestBody:
-        required: true
-        description: output parameters form
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
-                query:
-                  description: Optional string to search a list by name.
-                  type: string
-                order_by:
-                  description: Field to sort results by. name|status|created_at|updated_at
-                  type: string
-                order:
-                  description: ASC|DESC Sort by ascending or descending order.
-                  type: string
-
+            oneOf:
+              - type: integer
+                description: Number of items to return per page
+              - type: string
+                enum: ["all"]
+                description: Return all results without pagination
+        - in: query
+          name: tags
+          description: Filter campaigns by tags. Multiple tags can be specified by repeating the parameter
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: order
+          description: Determines the sort order of results. ASC for ascending, DESC for descending order
+          required: false
+          schema:
+            type: string
+            enum: ["ASC", "DESC"]
+        - in: query
+          name: order_by
+          description: Specifies the field by which to sort the campaigns. Available options are 'name', 'status', 'created_at', and 'updated_at'
+          required: false
+          schema:
+            type: string
+            enum: ["name", "status", "created_at", "updated_at"]
+        - in: query
+          name: query
+          description: SQL query expression to filter campaigns by custom criteria
+          required: false
+          schema:
+            type: string
       tags:
         - Campaigns
       responses:
@@ -1262,6 +1351,13 @@ paths:
       operationId: getRunningCampaignStats
       tags:
         - Campaigns
+      parameters:
+        - in: query
+          name: campaign_id
+          description: Campaign IDs to get stats for.
+          required: true
+          schema:
+            type: number
       responses:
         "200":
           description: list of stats for given set of campaign ids
@@ -1295,6 +1391,7 @@ paths:
           description: start value of date range
           schema:
             type: string
+            format: date
         - in: query
           required: true
           name: to
@@ -1304,6 +1401,7 @@ paths:
         - in: query
           name: id
           description: campaign id/s to retrive view counts
+          required: true
           schema:
             type: string
       responses:
@@ -1332,17 +1430,6 @@ paths:
           description: The id value of the campaign you want to get the preview of
           schema:
             type: integer
-      requestBody:
-        required: true
-        description: template id
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
-                template_id:
-                  description: template id
-                  type: integer
       responses:
         "200":
           description: HTML Preview of requested campaign
@@ -1682,6 +1769,28 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Template"
+    post:
+      description: handles template creation
+      operationId: createTemplate
+      tags:
+        - Templates
+      requestBody:
+        description: new template info
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewTemplate"
+      responses:
+        "200":
+          description: response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Template"
 
   "/templates/{id}":
     get:
@@ -1712,7 +1821,35 @@ paths:
                 properties:
                   data:
                     $ref: "#/components/schemas/Template"
-
+    put:
+      description: handles template modification
+      operationId: updateTemplateById
+      tags:
+        - Templates
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: The id value of the template you want to update.
+          schema:
+            type: integer
+      requestBody:
+        description: updated template info
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTemplate"
+      responses:
+        "200":
+          description: response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Template"
     delete:
       description: handles deletion of templates
       operationId: deleteTemplateById
@@ -1805,7 +1942,7 @@ paths:
   "/templates/{id}/default":
     put:
       description: handles template modification.
-      operationId: updateTemplateById
+      operationId: setDefaultTemplateById
       tags:
         - Templates
       parameters:
@@ -2022,6 +2159,10 @@ components:
             analytics.title:
               type: string
             analytics.toDate:
+              type: string
+            bounces.numSelected:
+              type: string
+            bounces.selectAll:
               type: string
             bounces.source:
               type: string
@@ -2487,6 +2628,8 @@ components:
               type: string
             import.subscribe:
               type: string
+            import.subscribeWarning:
+              type: string
             import.title:
               type: string
             import.upload:
@@ -2703,6 +2846,8 @@ components:
               type: string
             settings.bounces.enableSendgrid:
               type: string
+            settings.bounces.enableForwardemail:
+              type: string
             settings.bounces.enablePostmark:
               type: string
             settings.bounces.enableWebhooks:
@@ -2722,6 +2867,8 @@ components:
             settings.bounces.scanIntervalHelp:
               type: string
             settings.bounces.sendgridKey:
+              type: string
+            settings.bounces.forwardemailKey:
               type: string
             settings.bounces.postmarkUsername:
               type: string
@@ -2786,6 +2933,10 @@ components:
             settings.invalidMessengerName:
               type: string
             settings.mailserver.authProtocol:
+              type: string
+            settings.mailserver.name:
+              type: string
+            settings.mailserver.nameHelp:
               type: string
             settings.mailserver.host:
               type: string
@@ -3406,6 +3557,10 @@ components:
           type: boolean
         bounce.sendgrid_key:
           type: string
+        bounce.forwardemail_enabled:
+          type: boolean
+        bounce.forwardemail_key:
+          type: string
         bounce.postmark_enabled:
           type: boolean
         bounce.postmark_username:
@@ -3438,13 +3593,7 @@ components:
           type: string
         attribs:
           type: object
-          properties:
-            city:
-              type: string
-            good:
-              type: boolean
-            type:
-              type: string
+          additionalProperties: true
         status:
           type: string
         created_at:
@@ -3503,13 +3652,7 @@ components:
           type: string
         attribs:
           type: object
-          properties:
-            city:
-              type: string
-            good:
-              type: boolean
-            type:
-              type: string
+          additionalProperties: true
         status:
           type: string
         lists:
@@ -3557,18 +3700,7 @@ components:
           type: boolean
         attribs:
           type: object
-          properties:
-            city:
-              type: string
-            projects:
-              type: integer
-            stack:
-              type: object
-              properties:
-                languages:
-                  type: array
-                  items:
-                    type: string
+          additionalProperties: true
 
     UpdateSubscriber:
       type: object
@@ -3591,18 +3723,7 @@ components:
           type: boolean
         attribs:
           type: object
-          properties:
-            city:
-              type: string
-            projects:
-              type: integer
-            stack:
-              type: object
-              properties:
-                languages:
-                  type: array
-                  items:
-                    type: string
+          additionalProperties: true
 
     SubscriberQueryRequest:
       type: object
@@ -3687,6 +3808,8 @@ components:
             type: string
         subscriber_count:
           type: integer
+        description:
+          type: string
 
     NewList:
       type: object
@@ -3703,6 +3826,8 @@ components:
           type: array
           items:
             type: string
+        description:
+          type: string
 
     ImportStatus:
       type: object
@@ -3962,9 +4087,19 @@ components:
           type: string
         filename:
           type: string
+        content_type:
+          type: string
         created_at:
           type: string
         thumb_url:
+          type: string
+        thumb_uri:
+          type: string
+        provider:
+          type: string
+        meta:
+          type: object
+        url:
           type: string
         uri:
           type: string
@@ -3982,10 +4117,58 @@ components:
           type: string
         body:
           type: string
+        body_source:
+          type: string
+        subject:
+          type: string
         type:
           type: string
         is_default:
           type: boolean
+
+    NewTemplate:
+      type: object
+      required:
+        - name
+        - type
+        - body
+      properties:
+        name:
+          type: string
+          description: Name of the template
+        type:
+          type: string
+          enum: [campaign, campaign_visual, tx]
+          description: Type of the template
+        subject:
+          type: string
+          description: Subject line for the template (only for tx)
+        body_source:
+          type: string
+          description: JSON source for the email-builder template (only for campaign_visual)
+        body:
+          type: string
+          description: HTML body of the template
+
+    UpdateTemplate:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the template
+        type:
+          type: string
+          enum: [campaign, campaign_visual, tx]
+          description: Type of the template
+        subject:
+          type: string
+          description: Subject line for the template (only for tx)
+        body_source:
+          type: string
+          description: JSON source for the email-builder template (only for campaign_visual)
+        body:
+          type: string
+          description: HTML body of the template
 
     TransactionalMessage:
       type: object
